@@ -7,14 +7,15 @@ from keras.optimizers import Adam
 from keras.models import Model, load_model
 import keras.backend as K
 from sklearn.model_selection import train_test_split
-from data_helpers import Dataloader
+from VisualDataloader import Dataloader
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score
 import os, pickle
 import numpy as np
-
+import data_helpers_visual as vis
+import VisualEmb as emb
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"]="0"
@@ -27,6 +28,8 @@ class bc_LSTM:
         self.PATH = "./data/models/{}_weights_{}.hdf5".format(args.modality, self.classification_mode.lower())
         self.OUTPUT_PATH = "./data/pickles/{}_{}.pkl".format(args.modality, self.classification_mode.lower())
         print("Model initiated for {} classification".format(self.classification_mode))
+        # Maybe add the supporting code to import visual features here
+        # This can call the datahelpers-video functions and return dictionary of all dia_utt mapping
 
     def load_data(self, ):
 
@@ -39,6 +42,8 @@ class bc_LSTM:
             self.data.load_audio_data()
         elif self.modality == "bimodal":
             self.data.load_bimodal_data()
+        elif self.modality == "trimodal":
+            self.data.load_trimodal_data()
         else:
             exit()
 
@@ -101,7 +106,7 @@ class bc_LSTM:
     def get_text_model(self):
 
         # Modality specific hyperparameters
-        self.epochs = 5
+        self.epochs = 100
         self.batch_size = 50
 
         # Modality specific parameters
@@ -204,6 +209,25 @@ class bc_LSTM:
         model = Model(inputs, output)
         return model
 
+    def get_trimodal_model(self):
+
+        # Modality specific hyperparameters
+        self.epochs = 100
+        self.batch_size = 10
+
+        # Modality specific parameters
+        self.embedding_dim = self.train_x.shape[2]
+
+        print("Creating Model...")
+
+        inputs = Input(shape=(self.sequence_length, self.embedding_dim), dtype='float32')
+        masked = Masking(mask_value=0)(inputs)
+        lstm = Bidirectional(LSTM(300, activation='tanh', return_sequences=True, dropout=0.4), name="utter")(masked)
+        output = TimeDistributed(Dense(self.classes, activation='softmax'))(lstm)
+
+        model = Model(inputs, output)
+        return model
+
     def train_model(self):
 
         checkpoint = ModelCheckpoint(self.PATH, monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
@@ -216,6 +240,9 @@ class bc_LSTM:
             model.compile(optimizer='adadelta', loss='categorical_crossentropy', sample_weight_mode='temporal')
         elif self.modality == "bimodal":
             model = self.get_bimodal_model()
+            model.compile(optimizer='adam', loss='categorical_crossentropy', sample_weight_mode='temporal')
+        elif self.modality == "trimodal":
+            model = self.get_trimodal_model()
             model.compile(optimizer='adam', loss='categorical_crossentropy', sample_weight_mode='temporal')
 
         early_stopping = EarlyStopping(monitor='val_loss', patience=10)
@@ -258,6 +285,7 @@ if __name__ == "__main__":
     parser.add_argument("-classify", help="Set the classifiction to be 'Emotion' or 'Sentiment'", required=True)
     parser.add_argument("-modality", help="Set the modality to be 'text' or 'audio' or 'bimodal'", required=True)
     parser.add_argument("-train", default=False, action="store_true", help="Flag to intiate training")
+    parser.add_argument("-visual_emb", default=False, action="store_true", help="Flag to extract visual features")
     parser.add_argument("-test", default=False, action="store_true", help="Flag to initiate testing")
     args = parser.parse_args()
 
@@ -265,7 +293,7 @@ if __name__ == "__main__":
         print(
             "Classification mode hasn't been set properly. Please set the classifiction flag to be: -classify Emotion/Sentiment")
         exit()
-    if args.modality.lower() not in ["text", "audio", "bimodal"]:
+    if args.modality.lower() not in ["text", "audio", "bimodal", "trimodal"]:
         print("Modality hasn't been set properly. Please set the modality flag to be: -modality text/audio/bimodal")
         exit()
 
@@ -277,12 +305,22 @@ if __name__ == "__main__":
         if not os.path.exists(directory):
             os.makedirs(directory)
 
+    if args.visual_emb:
+        emb.extract_emb_wrapper(args.modality)
+        exit()
+
     model = bc_LSTM(args)
     model.load_data()
+
+    # Once the model and data is loaded, dump it into a pickle file. Write another script or function specifically for this
+    # Or pass it through the pre-trained model here and extract the features and then store it
 
     if args.test:
         model.test_model()
     else:
         model.train_model()
 
-# -classify Sentiment -modality text -train
+
+    """
+    Procedure to generate the embeddings using pretrained model
+    """
