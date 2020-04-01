@@ -285,7 +285,7 @@ if __name__ == "__main__":
     parser.add_argument("-classify", help="Set the classifiction to be 'Emotion' or 'Sentiment'", required=True)
     parser.add_argument("-modality", help="Set the modality to be 'text' or 'audio' or 'bimodal'", required=True)
     parser.add_argument("-train", default=False, action="store_true", help="Flag to intiate training")
-    parser.add_argument("-visual_emb", default=False, action="store_true", help="Flag to extract visual features")
+    parser.add_argument("-visual_emb", default=True, action="store_true", help="Flag to extract visual features")
     parser.add_argument("-test", default=False, action="store_true", help="Flag to initiate testing")
     args = parser.parse_args()
 
@@ -324,3 +324,5 @@ if __name__ == "__main__":
     """
     Procedure to generate the embeddings using pretrained model
     """
+
+# -classify emotion -modality trimodal -train
